@@ -1,14 +1,18 @@
 import math
 import cv2
 import numpy as np
+import pygame
+import time
+import serial
 
 face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml') #pre-trained face detection model
 
-cap = cv2.VideoCapture(2) #connect to the webcam (0 for laptop default, 1 for external; make sure it is not being used somewhere else)
+cap = cv2.VideoCapture(0) #connect to the webcam (0 for laptop default, 1 for external; make sure it is not being used somewhere else)
 frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
 frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
 max_angel = math.radians(78) #horizontal camera angel (from camera description)
+servo_center = 90 #max angle of servo motor (0-180 degrees)
 flip_parameter = None #set acording to camera parametrs
 
 center_screen_x = frame_width//2
@@ -19,6 +23,17 @@ cross_size = 10
 red = (0, 0, 255)
 yellow = (0, 200, 200)
 white = (255, 255, 255)
+
+pygame.mixer.init()
+
+shoot_sound = pygame.mixer.Sound("shoot.mp3")
+
+try:
+    ser = serial.Serial('com3', 9600, timeout=0.1) 
+    time.sleep(2)
+except Exception as e:
+    print("Serial connection failed: ", e)
+    exit()
 
 if not cap.isOpened():
     print("Error: Could not open webcam.")
@@ -38,6 +53,8 @@ def calc_alpha(x_difference, max_angel):
     h = (frame_width / 2) * math.tan(math.pi/2 - (max_angel/2))
     tan_alpha = x_difference/h
     alpha = math.atan(tan_alpha)
+    #servo_angle = servo_center - math.degrees(alpha)
+    #servo_angle = max(0, min(180, servo_angle))
     return alpha
 
 def arduino_move(alpha):
@@ -51,6 +68,8 @@ def arduino_shoot():
     #code
 
     print("shoot!")
+    shoot_sound.play()
+    time.sleep(3)
 
 while True:
     ret, frame = cap.read()
@@ -68,7 +87,10 @@ while True:
     faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
 
     for (x, y, w, h) in faces: #for every face draw rectangles and crosses
-        cv2.rectangle(frame, (x, y), (x+w, y+h), (255, 255, 255), 2)
+        string = 'X{0:d}Y{1:d}'.format((x+w//2), (y+h//2))
+        print(string)
+        ser.write(string.encode('utf-8'))
+        cv2.rectangle(frame, (x+w, y), (x+w+w, frame_height), (255, 255, 255), 2)
         
         #center of rectangle
         center_x = x + w // 2
